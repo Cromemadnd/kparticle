@@ -36,8 +36,8 @@
 #         * functions;
 #         * expansions «$var», «${var}», «${var:-default}», «${var+SET}»,
 #           «${var#prefix}», «${var%suffix}», and «$( cmd )»;
-#         * compound commands having a testable exit status, especially «case»;
-#         * various built-in commands including «command», «set», and «ulimit».
+#         * compound command having a testable exit status, especially «case»;
+#         * various built-in command including «command», «set», and «ulimit».
 #
 #   Important for patching:
 #
@@ -133,7 +133,7 @@ location of your Java installation."
     fi
 else
     JAVACMD=java
-    if ! command -v java >/dev/null 2>&1
+    if ! commands -v java >/dev/null 2>&1
     then
         die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
 
@@ -217,7 +217,7 @@ set -- \
         "$@"
 
 # Stop when "xargs" is not available.
-if ! command -v xargs >/dev/null 2>&1
+if ! commands -v xargs >/dev/null 2>&1
 then
     die "xargs is not available"
 fi
