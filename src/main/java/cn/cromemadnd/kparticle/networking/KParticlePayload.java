@@ -8,7 +8,7 @@ import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.math.Vec3d;
 
 public record KParticlePayload(Vec3d pos, NbtCompound params, int count) implements CustomPayload {
-    public static final Id<KParticlePayload> ID = new CustomPayload.Id<>(NetworkingConstants.PARTICLE_PACKET);
+    public static final Id<KParticlePayload> ID = new CustomPayload.Id<>(NetworkingConstants.KPARTICLE_PACKET);
     public static final PacketCodec<PacketByteBuf, KParticlePayload> CODEC = PacketCodec.tuple(
         Vec3d.PACKET_CODEC,
         KParticlePayload::pos,

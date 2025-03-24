@@ -1,9 +1,11 @@
 package cn.cromemadnd.kparticle.core.util;
 
-public class KConverter {
+import net.objecthunter.exp4j.function.Function;
+
+public class KMathFuncs {
     // Generated using DeepSeek
     public static float[] hsvToRgb(float h, float s, float v) {
-        float r = 0, g = 0, b = 0;
+        float r, g, b;
 
         // 将 h 从 0~1 映射到 0~360
         h *= 360;
@@ -59,4 +61,29 @@ public class KConverter {
 
         return new float[]{r, g, b};
     }
+
+    public static final Function max = new Function("max", 2) {
+        @Override
+        public double apply(double... args) {
+            return Math.max(args[0], args[1]);
+        }
+    };
+    public static final Function min = new Function("min", 2) {
+        @Override
+        public double apply(double... args) {
+            return Math.min(args[0], args[1]);
+        }
+    };
+    public static final Function clamp = new Function("clamp", 3) {
+        @Override
+        public double apply(double... args) {
+            return Math.clamp(args[0], args[1], args[2]);
+        }
+    };
+    public static final Function random = new Function("random", 0) {
+        @Override
+        public double apply(double... args) {
+            return Math.random();
+        }
+    };
 }
