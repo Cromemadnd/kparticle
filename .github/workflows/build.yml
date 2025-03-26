@@ -19,8 +19,11 @@ jobs:
         with:
           java-version: '21'
           distribution: 'microsoft'
-      - name: Install xargs (findutils)
-        run: sudo apt-get update && sudo apt-get install -y findutils
+      - name: Install xargs and fix path
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y findutils
+          echo "PATH=$PATH:/usr/bin" >> $GITHUB_ENV
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
