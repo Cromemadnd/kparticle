@@ -19,6 +19,8 @@ jobs:
         with:
           java-version: '21'
           distribution: 'microsoft'
+      - name: Install xargs (findutils)
+        run: sudo apt-get update && sudo apt-get install -y findutils
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build

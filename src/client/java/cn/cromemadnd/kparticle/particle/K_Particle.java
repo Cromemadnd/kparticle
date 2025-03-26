@@ -129,17 +129,19 @@ public class K_Particle extends SpriteBillboardParticle {
             this.expressionMap.put(key, builder.build().setVariable("p", this.p));
         }
 
-        if (!this.immortal) {
-            this._maxAge = (float) Math.max(evaluateWithVariables("lt", 0.0d), 1.0d);
+        if (this.expressionMap.containsKey("lt")) {
+            this._maxAge = (float) Math.max(evaluateWithVariables("lt", 1.0d), 1.0d);
             this.expressionMap.remove("lt");
         }
 
         if (this.expressionMap.containsKey("ts")) {
             this.tickSpeed = (float) evaluateWithVariables("ts", 0.0d);
+            this.expressionMap.remove("ts");
         }
 
         if (this.expressionMap.containsKey("ag")) {
             this._age = (float) Math.max(evaluateWithVariables("ag", 0.0d), 0.0d);
+            this.expressionMap.remove("ag");
         }
     }
 
