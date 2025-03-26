@@ -1,14 +1,11 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain platforms or Java versions, and provides a first line of defence
-# against bad commits.
-
 name: build
 on: [pull_request, push]
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      PATH: ${{ github.env.PATH }}:/usr/bin  # 全局 PATH 设置
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -19,15 +16,16 @@ jobs:
         with:
           java-version: '21'
           distribution: 'microsoft'
-      - name: Install xargs and fix path
+      - name: Install xargs
+        run: sudo apt-get install -y findutils
+      - name: Verify xargs
         run: |
-          sudo apt-get update
-          sudo apt-get install -y findutils
-          echo "PATH=$PATH:/usr/bin" >> $GITHUB_ENV
+          which xargs
+          xargs --version
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
-        run: ./gradlew build
+        run: ./gradlew build -Dorg.gradle.processes.xargs.path=/usr/bin/xargs
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:
