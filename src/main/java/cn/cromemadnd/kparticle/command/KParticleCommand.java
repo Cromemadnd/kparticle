@@ -17,8 +17,8 @@ public class KParticleCommand {
             .requires(source -> source.hasPermissionLevel(2))
             .then(CommandManager.argument("pos", Vec3ArgumentType.vec3())
                 .then(CommandManager.argument("params", NbtCompoundArgumentType.nbtCompound())
-                    .then(CommandManager.argument("viewers", EntityArgumentType.players())
-                        .then(CommandManager.argument("count", IntegerArgumentType.integer())
+                    .then(CommandManager.argument("count", IntegerArgumentType.integer())
+                        .then(CommandManager.argument("viewers", EntityArgumentType.players())
                             .executes(context -> {
                                 int i = 0;
                                 for (ServerPlayerEntity viewer : EntityArgumentType.getPlayers(context, "viewers")) {
@@ -32,7 +32,11 @@ public class KParticleCommand {
                                 int finalI = i;
                                 context.getSource().sendFeedback(() -> Text.literal("Particle package sent to %d players".formatted(finalI)), true);
                                 return i;
-                            })))))
+                            })
+                        )
+                    )
+                )
+            )
         ));
     }
 }

@@ -1,4 +1,4 @@
-package cn.cromemadnd.kparticle.core.util;
+package cn.cromemadnd.kparticle.core;
 
 import net.objecthunter.exp4j.function.Function;
 
@@ -84,6 +84,12 @@ public class KMathFuncs {
         @Override
         public double apply(double... args) {
             return Math.random();
+        }
+    };
+    public static final Function _if = new Function("if", 3) {
+        @Override
+        public double apply(double... args) {
+            return args[0] > 0 ? args[1] : args[2];
         }
     };
 }

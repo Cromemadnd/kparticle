@@ -1,30 +1,48 @@
 package cn.cromemadnd.kparticle.particle;
 
-import cn.cromemadnd.kparticle.KParticleClient;
-import cn.cromemadnd.kparticle.core.util.KMathFuncs;
+import cn.cromemadnd.kparticle.core.KExpressionBuilder;
+import cn.cromemadnd.kparticle.core.KMathFuncs;
+import cn.cromemadnd.kparticle.core.KParticleStorage;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.particle.*;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.objecthunter.exp4j.Expression;
-import net.objecthunter.exp4j.ExpressionBuilder;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Environment(EnvType.CLIENT)
 public class K_Particle extends SpriteBillboardParticle {
-    private final Expression[] expressions = new Expression[10];
     private final double _x;
     private final double _y;
     private final double _z;
-    private final boolean hsv;
+    private final double p;
+    private boolean immortal = false;
+    private boolean hsv = true;
+    private float tickSpeed = 1.0f;
+    private float _age = 0.0f;
+    private float _maxAge = 1.0f;
     private final SpriteProvider spriteProvider;
     private final List<String> variables = new ArrayList<>();
+    private static final Map<String, String> SINGLE_ATTRIBUTES = Map.of(
+        "alpha", "a",
+        "brightness", "l",
+        "scale", "s",
+        "frame", "f",
+        "lifetime", "lt",
+        "timescale", "ts",
+        "age", "ag"
+    );
+    private final Map<String, Expression> expressionMap = new HashMap<>();
+    private final Map<String, String> attributeMap = new HashMap<>();
 
     public K_Particle(ClientWorld world, double x, double y, double z, KParticleEffect params, SpriteProvider spriteProvider) {
         super(world, x, y, z);
@@ -32,101 +50,166 @@ public class K_Particle extends SpriteBillboardParticle {
         this._y = y;
         this._z = z;
         this.spriteProvider = spriteProvider;
-        System.out.println(spriteProvider);
-        //System.out.println(world.getPlayers());
+        this.p = params.p;
+        if (spriteProvider == null) {
+            this.markDead();
+            return;
+        }
 
-        double p = params.p;
-        this.maxAge = (int) Math.max(Math.round(new ExpressionBuilder(params.attributes.getString("lifetime")).variables("p").build().setVariable("p", p).evaluate()), 0);
-        NbtList color = params.attributes.getList("color", NbtElement.STRING_TYPE);
-        NbtList pos = params.attributes.getList("pos", NbtElement.STRING_TYPE);
-        this.hsv = params.attributes.getBoolean("hsv");
+        mergeExpressions(toAttributeMap(params.attributes));
+        tick();
 
-        // 构造表达式
-        final String[] expressions_raw = {
-            pos.isEmpty() ? "0" : pos.getString(0),
-            pos.isEmpty() ? "0" : pos.getString(1),
-            pos.isEmpty() ? "0" : pos.getString(2),
-            color.isEmpty() ? "1" : color.getString(0),
-            color.isEmpty() ? "1" : color.getString(1),
-            color.isEmpty() ? "1" : color.getString(2),
-            params.attributes.getString("alpha").isEmpty() ? "1" : params.attributes.getString("alpha"),
-            params.attributes.getString("brightness").isEmpty() ? "1" : params.attributes.getString("brightness"),
-            params.attributes.getString("scale").isEmpty() ? "1" : params.attributes.getString("scale"),
-            params.attributes.getString("frame").isEmpty() ? "0" : params.attributes.getString("frame"),
-        };
-        // 处理动态变量
+        KParticleStorage.getGroup(params.attributes.contains("group") ? params.attributes.getString("group") : "default").add(this);
+    }
+
+    public static Map<String, String> toAttributeMap(NbtCompound params) {
+        /*
+            将入参NBT标签转换为属性名-表达式的Map，同时设置hsv、immortal属性。
+            实际上是一个“扁平化”的过程。
+         */
+
+        // 将NBT扁平化为字典
+        final Map<String, String> attributeMap = new HashMap<>();
+
+        if (params.contains("hsv")) {
+            attributeMap.put("hsv", params.getBoolean("hsv") ? "1" : "");
+        }
+
+        if (params.contains("pos", NbtElement.LIST_TYPE)) {
+            NbtList pos = params.getList("pos", NbtElement.STRING_TYPE);
+            attributeMap.put("x", pos.getString(0));
+            attributeMap.put("y", pos.getString(1));
+            attributeMap.put("z", pos.getString(2));
+        }
+        if (params.contains("color", NbtElement.LIST_TYPE)) {
+            NbtList color = params.getList("color", NbtElement.STRING_TYPE);
+            attributeMap.put("r", color.getString(0));
+            attributeMap.put("g", color.getString(1));
+            attributeMap.put("b", color.getString(2));
+        }
+        for (String singleAttribute : SINGLE_ATTRIBUTES.keySet()) {
+            if (params.contains(singleAttribute, NbtElement.STRING_TYPE)) {
+                attributeMap.put(SINGLE_ATTRIBUTES.get(singleAttribute),
+                    params.getString(singleAttribute)
+                );
+            }
+        }
+        return attributeMap;
+    }
+
+    public void mergeExpressions(Map<String, String> attributeMap) {
+        /*
+            处理入参属性名-表达式Map，转化为自身属性名-Expression的Map。
+            入参Map中包含的属性会覆写已存在的属性; 未包含的属性不会导致已存在属性被删除。
+         */
         Pattern dynamicArgsPattern = Pattern.compile("\\{(\\w+)}");
-        for (int i = 0; i < expressions_raw.length; i++) {
-            ExpressionBuilder builder = new ExpressionBuilder(expressions_raw[i].replaceAll("[{}]", ""))
-                .function(KMathFuncs.max)
-                .function(KMathFuncs.min)
-                .function(KMathFuncs.clamp)
-                .function(KMathFuncs.random)
-                .variables("t", "p");
+        for (String key : attributeMap.keySet()) {
+            String rawExpression = attributeMap.get(key).replaceAll("\\{prev}", // 此处用之前存入的表达式替换{prev}
+                this.attributeMap.getOrDefault(key, "")
+            );
+            this.attributeMap.put(key, rawExpression);
+            //System.out.println("%s: %s".formatted(key, rawExpression));
 
-            Matcher matcher = dynamicArgsPattern.matcher(expressions_raw[i]);
+            if (key.equals("lt") && rawExpression.equals("inf")) {
+                this.immortal = true;
+                continue;
+            }
+            if (key.equals("hsv")){
+                this.hsv = rawExpression.equals("1");
+                continue;
+            }
+
+            KExpressionBuilder builder = new KExpressionBuilder(rawExpression.replaceAll("[{}]", ""));
+            Matcher matcher = dynamicArgsPattern.matcher(rawExpression);
             while (matcher.find()) {
                 String variable_found = matcher.group(1);
                 this.variables.add(variable_found);
                 builder.variable(variable_found);
             }
-            expressions[i] = builder.build().setVariable("p", p);
+            this.expressionMap.put(key, builder.build().setVariable("p", this.p));
         }
 
-        // 需要计算t = 0时的参数
-        this.age = -1;
-        tick();
+        if (!this.immortal) {
+            this._maxAge = (float) Math.max(evaluateWithVariables("lt", 0.0d), 1.0d);
+            this.expressionMap.remove("lt");
+        }
+
+        if (this.expressionMap.containsKey("ts")) {
+            this.tickSpeed = (float) evaluateWithVariables("ts", 0.0d);
+        }
+
+        if (this.expressionMap.containsKey("ag")) {
+            this._age = (float) Math.max(evaluateWithVariables("ag", 0.0d), 0.0d);
+        }
     }
 
-    private double evaluateWithVariables(Expression expression, double t) {
-        for (String variable : this.variables) {
-            expression.setVariable(variable, KParticleClient.particle_storage.getDouble(variable));
+    public void setExpressions(Map<String, String> attributeMap) {
+        /*
+            处理入参属性名-表达式Map，转化为自身属性名-Expression的Map。
+            Map中未包含的属性会被删除。
+         */
+        this.variables.clear();
+        this.expressionMap.clear();
+        this.attributeMap.clear();
+        mergeExpressions(attributeMap);
+    }
+
+    private double evaluateWithVariables(String attribute, double defaultVal) {
+        if (this.expressionMap.containsKey(attribute)) {
+            Expression expression = this.expressionMap.get(attribute);
+            for (String variable : this.variables) {
+                expression.setVariable(variable, KParticleStorage.getParticleData().getDouble(variable));
+            }
+            return expression.setVariable("t", this._age / 20.0d).evaluate();
+        } else {
+            return defaultVal;
         }
-        return expression.setVariable("t", t).evaluate();
     }
 
     @Override
     public void tick() {
-        //System.out.println(this.storage.get(KPARTICLE_STORAGE));
-        //System.out.println(KParticleClient.particle_storage);
         this.prevPosX = this.x;
         this.prevPosY = this.y;
         this.prevPosZ = this.z;
-        double t = (double) age / this.maxAge;
-        if (++this.age >= this.maxAge) {
+
+        this._age += this.tickSpeed;
+        if (!this.immortal && this._age >= this._maxAge) {
             this.markDead();
         } else {
-            this.x = _x + evaluateWithVariables(expressions[0], t);
-            this.y = _y + evaluateWithVariables(expressions[1], t);
-            this.z = _z + evaluateWithVariables(expressions[2], t);
+            this.x = _x + evaluateWithVariables("x", 0.0d);
+            this.y = _y + evaluateWithVariables("y", 0.0d);
+            this.z = _z + evaluateWithVariables("z", 0.0d);
 
-            float _red = (float) Math.clamp(evaluateWithVariables(expressions[3], t), 0.0d, 1.0d);
-            float _green = (float) Math.clamp(evaluateWithVariables(expressions[4], t), 0.0d, 1.0d);
-            float _blue = (float) Math.clamp(evaluateWithVariables(expressions[5], t), 0.0d, 1.0d);
+            if (expressionMap.containsKey("r")) {
+                float _red = (float) Math.clamp(evaluateWithVariables("r", 1.0d), 0.0d, 1.0d);
+                float _green = (float) Math.clamp(evaluateWithVariables("g", 1.0d), 0.0d, 1.0d);
+                float _blue = (float) Math.clamp(evaluateWithVariables("b", 1.0d), 0.0d, 1.0d);
 
-            if (hsv) {
-                float[] _rgbresult = KMathFuncs.hsvToRgb(_red, _green, _blue);
-                this.red = _rgbresult[0];
-                this.green = _rgbresult[1];
-                this.blue = _rgbresult[2];
+                if (this.hsv) {
+                    float[] _rgbResult = KMathFuncs.hsvToRgb(_red, _green, _blue);
+                    this.red = _rgbResult[0];
+                    this.green = _rgbResult[1];
+                    this.blue = _rgbResult[2];
+                } else {
+                    this.red = _red;
+                    this.green = _green;
+                    this.blue = _blue;
+                }
             } else {
-                this.red = _red;
-                this.green = _green;
-                this.blue = _blue;
+                this.red = this.green = this.blue = 1.0f;
             }
 
-            this.alpha = (float) Math.clamp(evaluateWithVariables(expressions[6], t), 0.0d, 1.0d);
-            //System.out.println();
-            //System.out.println(this.alpha);
-            this.scale = (float) Math.max(evaluateWithVariables(expressions[8], t), 0.0d);
+            this.alpha = (float) Math.clamp(evaluateWithVariables("a", 1.0d), 0.0d, 1.0d);
+            this.scale = (float) Math.max(evaluateWithVariables("s", 1.0d), 0.0d);
         }
-        //this.sprite = spriteProvider
-        this.setSprite(spriteProvider.getSprite((int) Math.round(evaluateWithVariables(expressions[9], t)) % this.maxAge, this.maxAge));
+        //System.out.println("%d: %d".formatted((int) Math.round(evaluateWithVariables("f", 0.0d) % this._maxAge), Math.round(this._maxAge)));
+        this.setSprite(spriteProvider.getSprite((int) Math.round(evaluateWithVariables("f", 0.0d) % this._maxAge), Math.round(this._maxAge)));
     }
 
     public int getBrightness(float tint) {
-        double t = (double) age / this.maxAge;
-        return (int) Math.round(Math.clamp(evaluateWithVariables(expressions[7], t), 0.0d, 1.0d) * 15728880);
+        int l = Math.clamp(Math.round(evaluateWithVariables("l", 15.0d)), 0, 15);
+        //System.out.println(l);
+        return (l << 20) + (l << 4);
     }
 
     @Override

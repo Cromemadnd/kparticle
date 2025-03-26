@@ -10,7 +10,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
 public class KSyncCommand {
-    static Identifier KSTORAGE = Identifier.of("kparticle");
+    private static final Identifier KSTORAGE = Identifier.of("kparticle");
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(CommandManager.literal("ksync")

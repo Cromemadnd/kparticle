@@ -1,0 +1,26 @@
+KParticle
+Copyright 2025 Cromemadnd
+
+This product includes software developed by the following third-party components:
+
+===============================================================================
+==                           Third-Party Libraries                          ==
+===============================================================================
+
+1. exp4j
+   - Website: https://www.objecthunter.net/exp4j/
+   - License: Apache License 2.0
+   - Copyright Notice: Copyright (c) Frank Asseg
+
+2. Fabric API
+   - Website: https://github.com/FabricMC/fabric
+   - License: Apache License 2.0
+   - Source Code: https://github.com/FabricMC/fabric
+   - Copyright Notice: Copyright (c) 2016-2024 FabricMC
+
+===============================================================================
+==                            Additional Notices                             ==
+===============================================================================
+
+- Minecraft is a trademark of Mojang Studios. This mod is not affiliated with Mojang.
+- Fabric Loader is licensed under Apache-2.0 (https://github.com/FabricMC/fabric-loader).
