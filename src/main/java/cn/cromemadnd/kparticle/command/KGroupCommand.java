@@ -55,6 +55,16 @@ public class KGroupCommand {
                         )
                     )
                 )
+                .then(CommandManager.literal("get")
+                    .then(CommandManager.argument("players", EntityArgumentType.players())
+                        .executes(context -> execute(context.getSource(),
+                            KGroupOperations.GET,
+                            StringArgumentType.getString(context, "group"),
+                            new NbtCompound(),
+                            EntityArgumentType.getPlayers(context, "players")
+                        ))
+                    )
+                )
             )
         ));
     }

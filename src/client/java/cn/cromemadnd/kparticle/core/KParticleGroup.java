@@ -1,38 +1,37 @@
 package cn.cromemadnd.kparticle.core;
 
-import cn.cromemadnd.kparticle.particle.K_Particle;
+import cn.cromemadnd.kparticle.particle.K_ParticleManager;
 import net.minecraft.nbt.NbtCompound;
 
+import java.util.Set;
 import java.util.WeakHashMap;
 
 public class KParticleGroup {
-    private final WeakHashMap<K_Particle, Boolean> particles = new WeakHashMap<>();
+    private final WeakHashMap<K_ParticleManager, Boolean> particleManagers = new WeakHashMap<>();
 
-    public void add(K_Particle particle) {
-        this.particles.put(particle, true);
+    public void add(K_ParticleManager particleManager) {
+        this.particleManagers.put(particleManager, true);
     }
 
     public void empty() {
-        for (K_Particle particle : this.particles.keySet()) {
-            particle.markDead();
+        for (K_ParticleManager particleManager : this.particleManagers.keySet()) {
+            particleManager.clear();
         }
     }
 
-    /*
-    public ArrayList<K_Particle> get(){
-        return new ArrayList<>(this.particles.keySet());
+    public Set<K_ParticleManager> get(){
+        return this.particleManagers.keySet();
     }
-    */
 
     public void merge(NbtCompound params) {
-        for (K_Particle particle : this.particles.keySet()) {
-            particle.mergeExpressions(K_Particle.toAttributeMap(params));
+        for (K_ParticleManager particle : this.particleManagers.keySet()) {
+            particle.merge(K_ParticleManager.toAttributeMap(params));
         }
     }
 
     public void set(NbtCompound params) {
-        for (K_Particle particle : this.particles.keySet()) {
-            particle.setExpressions(K_Particle.toAttributeMap(params));
+        for (K_ParticleManager particle : this.particleManagers.keySet()) {
+            particle.set(K_ParticleManager.toAttributeMap(params));
         }
     }
 }

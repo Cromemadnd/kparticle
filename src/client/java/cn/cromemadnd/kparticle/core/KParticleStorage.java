@@ -2,11 +2,11 @@ package cn.cromemadnd.kparticle.core;
 
 import net.minecraft.nbt.NbtCompound;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class KParticleStorage {
-    private static final Map<String, KParticleGroup> kParticleGroupMap = new HashMap<>();
+    private static final Map<String, KParticleGroup> kParticleGroupMap = new ConcurrentHashMap<>();
     private static NbtCompound particleData = new NbtCompound();
 
     public static NbtCompound getParticleData() {

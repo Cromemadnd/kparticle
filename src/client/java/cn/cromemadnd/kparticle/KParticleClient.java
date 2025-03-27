@@ -11,6 +11,7 @@ import cn.cromemadnd.kparticle.networking.KSyncPayload;
 import cn.cromemadnd.kparticle.particle.KParticleEffect;
 import cn.cromemadnd.kparticle.particle.KParticleTypes;
 import cn.cromemadnd.kparticle.particle.K_Particle;
+import cn.cromemadnd.kparticle.particle.K_ParticleManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
@@ -20,6 +21,8 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+
+import java.util.UUID;
 
 import static cn.cromemadnd.kparticle.particle.KParticleTypes.getKparticleType;
 
@@ -43,27 +46,30 @@ public class KParticleClient implements ClientModInitializer {
             }
 
             try {
+                String groupId = UUID.randomUUID().toString();
+                new K_ParticleManager(groupId, payloadParams);
+
                 for (int i = 0; i < count; i++) {
-                    KParticleEffect params = new KParticleEffect(payloadParams, (double) i / count, particleId);
+                    KParticleEffect params = new KParticleEffect(particleId, groupId, (double) i / count, i);
 
                     if (client.world != null) {
-                        client.world.addParticle(params, pos.x, pos.y, pos.z, 0, 0, 0);
+                        client.world.addParticle(params, true, true, pos.x, pos.y, pos.z, 0, 0, 0);
                     }
                 }
             } catch (Exception e) {
-                if (client.player != null) {
-                    client.player.sendMessage(Text.literal(
-                            "%s:\n%s".formatted(e.getMessage(), e.getCause().getMessage()))
-                        , false);
-                }
-                throw e;
+                assert client.player != null;
+                client.player.sendMessage(Text.literal(
+                        "%s:\n%s".formatted(e.getMessage(), e.getCause().getMessage()))
+                    , false);
+                //throw e;
             }
         });
         ClientPlayNetworking.registerGlobalReceiver(KSyncPayload.ID, (payload, context) -> KParticleStorage.setParticleData(payload.getStorage()));
         ClientPlayNetworking.registerGlobalReceiver(KGroupPayload.ID, (payload, context) -> {
             int operation = payload.getOperation();
             KParticleGroup group = KParticleStorage.getGroup(payload.getGroup());
-            //System.out.println(operation);
+
+            ClientPlayerEntity player = context.client().player;
             switch (operation) {
                 case KGroupOperations.CLEAR: {
                     group.empty();
@@ -77,18 +83,17 @@ public class KParticleClient implements ClientModInitializer {
                     group.merge(payload.getData());
                 }
                 break;
+                case KGroupOperations.GET: {
+                    assert player != null;
+                    player.sendMessage(Text.literal(group.get().toString()), false);
+                }
+                break;
                 default: {
-                    ClientPlayerEntity player = context.client().player;
-                    if (player != null) {
-                        player.sendMessage(Text.literal("Unknown operation %d".formatted(payload.getOperation())), false);
-                    }
+                    assert player != null;
+                    player.sendMessage(Text.literal("Unknown operation %d".formatted(payload.getOperation())), false);
                 }
             }
         });
-
-        // 进行进入、退出服务器时，本地存储注册与销毁事件的注册
-        /*ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-        });*/
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             KParticleStorage.clearParticleData();
