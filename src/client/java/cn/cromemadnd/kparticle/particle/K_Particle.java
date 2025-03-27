@@ -63,9 +63,10 @@ public class K_Particle extends SpriteBillboardParticle {
             this.expressionMap.put(key, builder.build().setVariable("p", this.p).setVariable("n", this.n));
         }
 
-        variableSnapshot.put("t", 0.0d);
-        variableSnapshot.put("tp", 0.0d);
         manager.variables.forEach((variable) -> variableSnapshot.put(variable, KParticleStorage.getParticleData().getDouble(variable)));
+        variableSnapshot.put("t", 0.0d);
+        variableSnapshot.put("c", 0.0d);
+        //System.out.println(variableSnapshot);
 
         if (this.expressionMap.containsKey("lt")) {
             this._maxAge = Math.max(evaluateWithVariables("lt", 1.0d, variableSnapshot), 1.0d);
@@ -95,7 +96,7 @@ public class K_Particle extends SpriteBillboardParticle {
         if (this.expressionMap.containsKey(attribute)) {
             Expression expression = this.expressionMap.get(attribute);
             snapshot.forEach(expression::setVariable);
-            return expression.setVariable("t", snapshot.get("t")).setVariable("tp", snapshot.get("tp")).evaluate();
+            return expression.evaluate();
         } else {
             return defaultVal;
         }
@@ -113,9 +114,9 @@ public class K_Particle extends SpriteBillboardParticle {
         }
         this._age += this.tickSpeed;
 
-        variableSnapshot.put("t", this._age / 20.0d);
-        variableSnapshot.put("tp", this._maxAge == 0.0d ? 0.0d : this._age / this._maxAge);
         manager.variables.forEach((variable) -> variableSnapshot.put(variable, KParticleStorage.getParticleData().getDouble(variable)));
+        variableSnapshot.put("t", this._age / 20.0d);
+        variableSnapshot.put("c", this._maxAge == 0.0d ? 0.0d : this._age / this._maxAge);
 
         this.setSprite(spriteProvider.getSprite((int) Math.round(evaluateWithVariables("f", 0.0d, variableSnapshot) % this._maxAge), (int) Math.round(this._maxAge)));
         if (!this.immortal && this._age >= this._maxAge) {
@@ -145,7 +146,7 @@ public class K_Particle extends SpriteBillboardParticle {
             }
 
             this.alpha = (float) Math.clamp(evaluateWithVariables("a", 1.0d, variableSnapshot), 0.0d, 1.0d);
-            this.scale = (float) Math.max(evaluateWithVariables("s", 1.0d, variableSnapshot), 0.0d);
+            this.scale = (float) Math.max(evaluateWithVariables("s", 0.15d, variableSnapshot), 0.0d);
         }
     }
 

@@ -11,6 +11,6 @@ public class KExpressionBuilder extends ExpressionBuilder {
             KMathFuncs.clamp,
             KMathFuncs.random,
             KMathFuncs._if
-        ).variables("t", "p");
+        ).variables("t", "p", "c", "n");
     }
 }
