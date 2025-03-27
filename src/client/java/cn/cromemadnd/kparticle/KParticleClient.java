@@ -44,7 +44,7 @@ public class KParticleClient implements ClientModInitializer {
 
             try {
                 for (int i = 0; i < count; i++) {
-                    KParticleEffect params = new KParticleEffect(payloadParams, (double) i / count, particleId);
+                    KParticleEffect params = new KParticleEffect(payloadParams, (double) i / count, i, particleId);
 
                     if (client.world != null) {
                         client.world.addParticle(params, pos.x, pos.y, pos.z, 0, 0, 0);

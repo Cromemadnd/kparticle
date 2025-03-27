@@ -11,27 +11,27 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.objecthunter.exp4j.Expression;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Environment(EnvType.CLIENT)
 public class K_Particle extends SpriteBillboardParticle {
-    private final double _x;
-    private final double _y;
-    private final double _z;
-    private final double p;
-    private boolean immortal = false;
-    private boolean hsv = true;
-    private float tickSpeed = 1.0f;
-    private float _age = 0.0f;
-    private float _maxAge = 1.0f;
+    private final double _x, _y, _z, p;
+    private final int n;
+    private boolean immortal = false, hsv = false;
+    private float tickSpeed = 1.0f, _age = 0.0f, _maxAge = 1.0f;
     private final SpriteProvider spriteProvider;
     private final List<String> variables = new ArrayList<>();
+    private final Map<String, Expression> expressionMap = new ConcurrentHashMap<>();
+    private final Map<String, String> attributeMap = new ConcurrentHashMap<>();
+    private final ExecutorService asyncPool = Executors.newWorkStealingPool();
     private static final Map<String, String> SINGLE_ATTRIBUTES = Map.of(
         "alpha", "a",
         "brightness", "l",
@@ -41,8 +41,56 @@ public class K_Particle extends SpriteBillboardParticle {
         "timescale", "ts",
         "age", "ag"
     );
-    private final Map<String, Expression> expressionMap = new HashMap<>();
-    private final Map<String, String> attributeMap = new HashMap<>();
+
+    private static class VariableSnapshot {
+        final Map<String, Double> values;
+        final double t, tp;
+
+        VariableSnapshot(List<String> variables, double age, double maxAge) {
+            this.values = new ConcurrentHashMap<>();
+            for (String var : variables) {
+                this.values.put(var, KParticleStorage.getParticleData().getDouble(var));
+            }
+            this.t = (age) / 20.0d;
+            this.tp = maxAge == 0.0d ? 0.0d : (age) / maxAge;
+        }
+    }
+
+    private static class AsyncEvaluator {
+        final VariableSnapshot snapshot;
+        final ExecutorService asyncPool;
+        final Map<String, Expression> expressionMap;
+        final Map<String, Future<Double>> futureMap = new ConcurrentHashMap<>();
+
+        AsyncEvaluator(VariableSnapshot snapshot, Map<String, Expression> expressionMap, ExecutorService asyncPool) {
+            this.snapshot = snapshot;
+            this.expressionMap = expressionMap;
+            this.asyncPool = asyncPool;
+        }
+
+        void submit(String attribute) {
+            Expression expression = this.expressionMap.get(attribute);
+            if (expression == null) return;
+
+            futureMap.put(attribute, asyncPool.submit(() -> {
+                snapshot.values.forEach(expression::setVariable);
+                return expression.setVariable("t", snapshot.t)
+                    .setVariable("tp", snapshot.tp)
+                    .evaluate();
+            }));
+        }
+
+        double get(String attribute, double defaultValue) {
+            try {
+                Future<Double> future = futureMap.get(attribute);
+                if (future == null) return defaultValue;
+                return future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                Thread.currentThread().interrupt();
+                return 0.0;
+            }
+        }
+    }
 
     public K_Particle(ClientWorld world, double x, double y, double z, KParticleEffect params, SpriteProvider spriteProvider) {
         super(world, x, y, z);
@@ -50,6 +98,7 @@ public class K_Particle extends SpriteBillboardParticle {
         this._y = y;
         this._z = z;
         this.spriteProvider = spriteProvider;
+        this.n = params.n;
         this.p = params.p;
         if (spriteProvider == null) {
             this.markDead();
@@ -114,7 +163,7 @@ public class K_Particle extends SpriteBillboardParticle {
                 this.immortal = true;
                 continue;
             }
-            if (key.equals("hsv")){
+            if (key.equals("hsv")) {
                 this.hsv = rawExpression.equals("1");
                 continue;
             }
@@ -126,21 +175,26 @@ public class K_Particle extends SpriteBillboardParticle {
                 this.variables.add(variable_found);
                 builder.variable(variable_found);
             }
-            this.expressionMap.put(key, builder.build().setVariable("p", this.p));
+            this.expressionMap.put(key, builder.build().setVariable("p", this.p).setVariable("n", this.n));
         }
 
+        AsyncEvaluator asyncEvaluator = new AsyncEvaluator(new VariableSnapshot(this.variables, 0.0d, 1.0d), this.expressionMap, this.asyncPool);
+        asyncEvaluator.submit("lt");
+        asyncEvaluator.submit("ts");
+        asyncEvaluator.submit("ag");
+
         if (this.expressionMap.containsKey("lt")) {
-            this._maxAge = (float) Math.max(evaluateWithVariables("lt", 1.0d), 1.0d);
+            this._maxAge = (float) Math.max(asyncEvaluator.get("lt", 1.0d), 1.0d);
             this.expressionMap.remove("lt");
         }
 
         if (this.expressionMap.containsKey("ts")) {
-            this.tickSpeed = (float) evaluateWithVariables("ts", 0.0d);
+            this.tickSpeed = (float) asyncEvaluator.get("ts", 1.0d);
             this.expressionMap.remove("ts");
         }
 
         if (this.expressionMap.containsKey("ag")) {
-            this._age = (float) Math.max(evaluateWithVariables("ag", 0.0d), 0.0d);
+            this._age = (float) Math.max(asyncEvaluator.get("ag", 0.0d), 0.0d);
             this.expressionMap.remove("ag");
         }
     }
@@ -156,36 +210,29 @@ public class K_Particle extends SpriteBillboardParticle {
         mergeExpressions(attributeMap);
     }
 
-    private double evaluateWithVariables(String attribute, double defaultVal) {
-        if (this.expressionMap.containsKey(attribute)) {
-            Expression expression = this.expressionMap.get(attribute);
-            for (String variable : this.variables) {
-                expression.setVariable(variable, KParticleStorage.getParticleData().getDouble(variable));
-            }
-            return expression.setVariable("t", this._age / 20.0d).evaluate();
-        } else {
-            return defaultVal;
-        }
-    }
-
     @Override
     public void tick() {
         this.prevPosX = this.x;
         this.prevPosY = this.y;
         this.prevPosZ = this.z;
 
+        if (this.tickSpeed == 0) return;
         this._age += this.tickSpeed;
         if (!this.immortal && this._age >= this._maxAge) {
             this.markDead();
         } else {
-            this.x = _x + evaluateWithVariables("x", 0.0d);
-            this.y = _y + evaluateWithVariables("y", 0.0d);
-            this.z = _z + evaluateWithVariables("z", 0.0d);
+            AsyncEvaluator asyncEvaluator = getAsyncEvaluator(this.variables, this._age, this._maxAge, this.expressionMap, this.asyncPool);
+
+            if (expressionMap.containsKey("x")) {
+                this.x = _x + asyncEvaluator.get("x", 0.0d);
+                this.y = _y + asyncEvaluator.get("y", 0.0d);
+                this.z = _z + asyncEvaluator.get("z", 0.0d);
+            }
 
             if (expressionMap.containsKey("r")) {
-                float _red = (float) Math.clamp(evaluateWithVariables("r", 1.0d), 0.0d, 1.0d);
-                float _green = (float) Math.clamp(evaluateWithVariables("g", 1.0d), 0.0d, 1.0d);
-                float _blue = (float) Math.clamp(evaluateWithVariables("b", 1.0d), 0.0d, 1.0d);
+                float _red = (float) Math.clamp(asyncEvaluator.get("r", 1.0d), 0.0d, 1.0d);
+                float _green = (float) Math.clamp(asyncEvaluator.get("g", 1.0d), 0.0d, 1.0d);
+                float _blue = (float) Math.clamp(asyncEvaluator.get("b", 1.0d), 0.0d, 1.0d);
 
                 if (this.hsv) {
                     float[] _rgbResult = KMathFuncs.hsvToRgb(_red, _green, _blue);
@@ -201,17 +248,38 @@ public class K_Particle extends SpriteBillboardParticle {
                 this.red = this.green = this.blue = 1.0f;
             }
 
-            this.alpha = (float) Math.clamp(evaluateWithVariables("a", 1.0d), 0.0d, 1.0d);
-            this.scale = (float) Math.max(evaluateWithVariables("s", 1.0d), 0.0d);
+            this.alpha = (float) Math.clamp(asyncEvaluator.get("a", 1.0d), 0.0d, 1.0d);
+            this.scale = (float) Math.max(asyncEvaluator.get("s", 0.25d), 0.0d);
+            this.setSprite(spriteProvider.getSprite((int) Math.round(asyncEvaluator.get("f", 0.0d) % 1.0d), 1));
         }
-        //System.out.println("%d: %d".formatted((int) Math.round(evaluateWithVariables("f", 0.0d) % this._maxAge), Math.round(this._maxAge)));
-        this.setSprite(spriteProvider.getSprite((int) Math.round(evaluateWithVariables("f", 0.0d) % this._maxAge), Math.round(this._maxAge)));
     }
 
+    private static @NotNull AsyncEvaluator getAsyncEvaluator(List<String> variables, float _age, float _maxAge, Map<String, Expression> expressionMap, ExecutorService asyncPool) {
+        AsyncEvaluator asyncEvaluator = new AsyncEvaluator(new VariableSnapshot(variables, _age, _maxAge), expressionMap, asyncPool);
+        asyncEvaluator.submit("x");
+        asyncEvaluator.submit("y");
+        asyncEvaluator.submit("z");
+        asyncEvaluator.submit("r");
+        asyncEvaluator.submit("g");
+        asyncEvaluator.submit("b");
+        asyncEvaluator.submit("a");
+        asyncEvaluator.submit("s");
+        asyncEvaluator.submit("f");
+        return asyncEvaluator;
+    }
+
+    @Override
     public int getBrightness(float tint) {
-        int l = Math.clamp(Math.round(evaluateWithVariables("l", 15.0d)), 0, 15);
-        //System.out.println(l);
+        AsyncEvaluator asyncEvaluator = new AsyncEvaluator(new VariableSnapshot(variables, _age, _maxAge), expressionMap, asyncPool);
+        asyncEvaluator.submit("l");
+        int l = Math.clamp(Math.round(asyncEvaluator.get("l", 15.0d)), 0, 15);
         return (l << 20) + (l << 4);
+    }
+
+    @Override
+    public void markDead() {
+        asyncPool.shutdownNow();
+        this.dead = true;
     }
 
     @Override

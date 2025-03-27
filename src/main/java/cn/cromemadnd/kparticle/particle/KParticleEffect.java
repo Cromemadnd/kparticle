@@ -18,8 +18,10 @@ public class KParticleEffect implements ParticleEffect {
     public static final MapCodec<KParticleEffect> CODEC = RecordCodecBuilder.mapCodec((instance) -> {
         return instance.group(Codecs.NON_EMPTY_STRING.fieldOf("attributes").forGetter((particle) -> {
             return particle.attributes.toString();
-        }), Codecs.NON_NEGATIVE_FLOAT.fieldOf("n").forGetter((particle) -> {
+        }), Codecs.NON_NEGATIVE_FLOAT.fieldOf("p").forGetter((particle) -> {
             return (float) particle.p;
+        }), Codecs.NON_NEGATIVE_INT.fieldOf("n").forGetter((particle) -> {
+            return particle.n;
         }), Codecs.NON_EMPTY_STRING.fieldOf("id").forGetter((particle) -> {
             return particle.id;
         })).apply(instance, KParticleEffect::new);
@@ -33,6 +35,8 @@ public class KParticleEffect implements ParticleEffect {
             (particle) -> particle.attributes,
             PacketCodecs.DOUBLE,
             (particle) -> particle.p,
+            PacketCodecs.INTEGER,
+            (particle) -> particle.n,
             PacketCodecs.STRING,
             (particle) -> particle.id,
             KParticleEffect::new);
@@ -40,31 +44,27 @@ public class KParticleEffect implements ParticleEffect {
 
     public final NbtCompound attributes/*, storage*/;
     public final double p;
+    public final int n;
     public final String id;
 
-    public KParticleEffect(NbtCompound nbt, double p/*, NbtCompound storage*/, String id) {
+    public KParticleEffect(NbtCompound nbt, double p, int n, String id) {
         this.attributes = nbt;
         this.p = p;
         this.id = id;
+        this.n = n;
     }
 
-    public KParticleEffect(String nbt, double p/*, String storage*/, String id) {
+    public KParticleEffect(String nbt, double p, int n, String id) {
         NbtCompound _attributes;//, _storage;
-        //this.attributes = nbt;
         try {
             _attributes = StringNbtReader.parse(nbt);
-            //_storage = StringNbtReader.parse(storage);
-            //System.out.println(_attributes);
         } catch (CommandSyntaxException e) {
             _attributes = new NbtCompound();
-            //_storage = new NbtCompound();
-            //System.out.println(e);
         }
         this.attributes = _attributes;
         this.p = p;
         this.id = id;
-        //this.storage = _storage;
-        //System.out.println(this.attributes);
+        this.n = n;
     }
 
     public ParticleType<KParticleEffect> getType() {
