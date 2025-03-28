@@ -8,7 +8,9 @@
 
 ### **简洁·定制·数学**
 
-一个让你可以“**在Minecraft里玩[Desmos](https://www.desmos.com/)**”的Fabric粒子模组。
+#### 一个让你可以“**在Minecraft里玩[Desmos](https://www.desmos.com/)**”的Fabric粒子模组。
+
+### [>>> Wiki <<<][wiki-url]
 
 > 境符「波と粒の境界」
 ![演示图片](images/1.gif)
@@ -23,8 +25,6 @@ kparticle ~ ~5 ~ {
   "alpha": "if(c-p, 1, 0)"
 } 1000 @a
 ```
-
-## [>>> Wiki <<<][wiki-url]
 
 ## 目录
 
