@@ -2,24 +2,22 @@ package cn.cromemadnd.kparticle.core;
 
 import net.minecraft.nbt.NbtCompound;
 
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class KParticleStorage {
-    private static final Map<String, KParticleGroup> kParticleGroupMap = new ConcurrentHashMap<>();
-    private static NbtCompound particleData = new NbtCompound();
+    private static final ConcurrentHashMap<String, KParticleGroup> kParticleGroupMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Double> particleData = new ConcurrentHashMap<>();
 
-    public static NbtCompound getParticleData() {
-        return particleData;
+    public static double getParticleData(String key) {
+        return particleData.getOrDefault(key, 0.0d);
     }
 
     public static void setParticleData(NbtCompound data) {
-        if (data != null) {
-            particleData = data;
-        }
+        data.getKeys().forEach((key) -> particleData.put(key, data.getDouble(key)));
     }
+
     public static void clearParticleData(){
-        particleData = new NbtCompound();
+        particleData.clear();
     }
 
     public static KParticleGroup getGroup(String id) {

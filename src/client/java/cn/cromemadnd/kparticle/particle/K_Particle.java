@@ -20,8 +20,7 @@ public class K_Particle extends SpriteBillboardParticle {
     private final SpriteProvider spriteProvider;
     private final Map<String, Expression> expressionMap = new ConcurrentHashMap<>();
     private final Map<String, Double> variableSnapshot = new ConcurrentHashMap<>();
-    private boolean immortal = false, hsv = false;
-    private double tickSpeed = 1.0, _age = 0.0, _maxAge = 1.0, lastTickSpeed = 1.0;
+    private double tickSpeed, _age, _maxAge;
 
     public K_Particle(ClientWorld world, double x, double y, double z, KParticleEffect params, SpriteProvider spriteProvider) {
         super(world, x, y, z);
@@ -49,39 +48,21 @@ public class K_Particle extends SpriteBillboardParticle {
          */
         for (String key : manager.attributeMap.keySet()) {
             String rawExpression = manager.attributeMap.get(key);
-            if (key.equals("lt") && rawExpression.equals("inf")) {
-                this.immortal = true;
-                continue;
-            }
-            if (key.equals("hsv")) {
-                this.hsv = rawExpression.equals("1");
-                continue;
-            }
-
             KExpressionBuilder builder = new KExpressionBuilder(rawExpression.replaceAll("[{}]", ""));
             manager.variables.forEach(builder::variable);
             this.expressionMap.put(key, builder.build().setVariable("p", this.p).setVariable("n", this.n));
         }
 
-        manager.variables.forEach((variable) -> variableSnapshot.put(variable, KParticleStorage.getParticleData().getDouble(variable)));
+        manager.variables.forEach((variable) -> variableSnapshot.put(variable, KParticleStorage.getParticleData(variable)));
         variableSnapshot.put("t", 0.0d);
         variableSnapshot.put("c", 0.0d);
-        //System.out.println(variableSnapshot);
 
-        if (this.expressionMap.containsKey("lt")) {
-            this._maxAge = Math.max(evaluateWithVariables("lt", 1.0d, variableSnapshot), 1.0d);
-            this.expressionMap.remove("lt");
-        }
-
-        if (this.expressionMap.containsKey("ts")) {
-            this.tickSpeed = evaluateWithVariables("ts", 1.0d, variableSnapshot);
-            this.expressionMap.remove("ts");
-        }
-
-        if (this.expressionMap.containsKey("ag")) {
-            this._age = Math.max(evaluateWithVariables("ag", 0.0d, variableSnapshot), 0.0d);
-            this.expressionMap.remove("ag");
-        }
+        this._maxAge = Math.max(evaluateWithVariables("lt", 1.0d, variableSnapshot), 1.0d);
+        this.expressionMap.remove("lt");
+        this.tickSpeed = evaluateWithVariables("ts", 1.0d, variableSnapshot);
+        this.expressionMap.remove("ts");
+        this._age = Math.max(evaluateWithVariables("ag", 0.0d, variableSnapshot), 0.0d);
+        this.expressionMap.remove("ag");
     }
 
     public void clearExpressions() {
@@ -93,6 +74,10 @@ public class K_Particle extends SpriteBillboardParticle {
     }
 
     private double evaluateWithVariables(String attribute, double defaultVal, Map<String, Double> snapshot) {
+        if (manager.constAttributeMap.containsKey(attribute)) {
+            return manager.constAttributeMap.get(attribute);
+        }
+
         if (this.expressionMap.containsKey(attribute)) {
             Expression expression = this.expressionMap.get(attribute);
             snapshot.forEach(expression::setVariable);
@@ -108,45 +93,82 @@ public class K_Particle extends SpriteBillboardParticle {
         this.prevPosY = this.y;
         this.prevPosZ = this.z;
 
-        if (this.lastTickSpeed == 0.0d) {
-            this.lastTickSpeed = this.tickSpeed;
-            return;
-        }
+        if (this.tickSpeed == 0.0d) return;
         this._age += this.tickSpeed;
 
-        manager.variables.forEach((variable) -> variableSnapshot.put(variable, KParticleStorage.getParticleData().getDouble(variable)));
+        manager.variables.forEach((variable) -> variableSnapshot.put(variable, KParticleStorage.getParticleData(variable)));
         variableSnapshot.put("t", this._age / 20.0d);
-        variableSnapshot.put("c", this._maxAge == 0.0d ? 0.0d : this._age / this._maxAge);
+        variableSnapshot.put("c", manager.immortal ? 0.0d : this._age / this._maxAge);
 
         this.setSprite(spriteProvider.getSprite((int) Math.round(evaluateWithVariables("f", 0.0d, variableSnapshot) % this._maxAge), (int) Math.round(this._maxAge)));
-        if (!this.immortal && this._age >= this._maxAge) {
+        if (!manager.immortal && this._age >= this._maxAge) {
             this.markDead();
         } else {
-            this.x = _x + evaluateWithVariables("x", 0.0d, variableSnapshot);
-            this.y = _y + evaluateWithVariables("y", 0.0d, variableSnapshot);
-            this.z = _z + evaluateWithVariables("z", 0.0d, variableSnapshot);
+            double __x = 0, __y = 0, __z = 0;
+            for (int i = 0; i < this.manager.coords.size(); i++) {
+                double _x = evaluateWithVariables("x%d".formatted(i), 0.0d, variableSnapshot);
+                double _y = evaluateWithVariables("y%d".formatted(i), 0.0d, variableSnapshot);
+                double _z = evaluateWithVariables("z%d".formatted(i), 0.0d, variableSnapshot);
 
-            if (expressionMap.containsKey("r")) {
-                float _red = (float) Math.clamp(evaluateWithVariables("r", 1.0d, variableSnapshot), 0.0d, 1.0d);
-                float _green = (float) Math.clamp(evaluateWithVariables("g", 1.0d, variableSnapshot), 0.0d, 1.0d);
-                float _blue = (float) Math.clamp(evaluateWithVariables("b", 1.0d, variableSnapshot), 0.0d, 1.0d);
-
-                if (this.hsv) {
-                    float[] _rgbResult = KMathFuncs.hsvToRgb(_red, _green, _blue);
-                    this.red = _rgbResult[0];
-                    this.green = _rgbResult[1];
-                    this.blue = _rgbResult[2];
-                } else {
-                    this.red = _red;
-                    this.green = _green;
-                    this.blue = _blue;
+                switch (manager.coords.get(i)) {
+                    case 0: { // 平面直角坐标系（MC，Y为竖轴）
+                        // x, y, z
+                        __x += _x;
+                        __y += _y;
+                        __z += _z;
+                    }
+                    break;
+                    case 1: { // 球坐标系（MC，theta为水平面俯角，phi为与z+轴的角(x-方向为90°)）
+                        // r, phi(deg), theta(deg)
+                        __x -= _x * Math.cos(Math.toRadians(_z)) * Math.sin(Math.toRadians(_y));
+                        __y -= _x * Math.sin(Math.toRadians(_z));
+                        __z += _x * Math.cos(Math.toRadians(_z)) * Math.cos(Math.toRadians(_y));
+                    }
+                    break;
+                    case 2: { // 球坐标系（数学）
+                        // r, theta(rad), phi(rad)
+                        __x += _x * Math.sin(_y) * Math.cos(_z);
+                        __y += _x * Math.cos(_y);
+                        __z += _x * Math.sin(_y) * Math.sin(_z);
+                    }
+                    break;
+                    case 3: { // 柱坐标系（MC，phi为与z+轴的角(x-方向为90°)）
+                        // r, phi(deg), z
+                        __x -= _x * Math.sin(Math.toRadians(_y));
+                        __y += _z;
+                        __z += _x * Math.cos(Math.toRadians(_y));
+                    }
+                    break;
+                    case 4: { // 柱坐标系（数学）
+                        // r, phi(deg), z
+                        __x += _x * Math.cos(_y);
+                        __y += _z;
+                        __z += _x * Math.sin(_y);
+                    }
+                    break;
                 }
+            }
+            this.x = this._x + __x;
+            this.y = this._y + __y;
+            this.z = this._z + __z;
+
+            float _red = (float) Math.clamp(evaluateWithVariables("r", 1.0d, variableSnapshot), 0.0d, 1.0d);
+            float _green = (float) Math.clamp(evaluateWithVariables("g", 1.0d, variableSnapshot), 0.0d, 1.0d);
+            float _blue = (float) Math.clamp(evaluateWithVariables("b", 1.0d, variableSnapshot), 0.0d, 1.0d);
+
+            if (manager.hsv) {
+                float[] _rgbResult = KMathFuncs.hsvToRgb(_red, _green, _blue);
+                this.red = _rgbResult[0];
+                this.green = _rgbResult[1];
+                this.blue = _rgbResult[2];
             } else {
-                this.red = this.green = this.blue = 1.0f;
+                this.red = _red;
+                this.green = _green;
+                this.blue = _blue;
             }
 
             this.alpha = (float) Math.clamp(evaluateWithVariables("a", 1.0d, variableSnapshot), 0.0d, 1.0d);
-            this.scale = (float) Math.max(evaluateWithVariables("s", 0.15d, variableSnapshot), 0.0d);
+            this.scale = (float) Math.max(evaluateWithVariables("s", 0.1d, variableSnapshot), 0.0d);
         }
     }
 

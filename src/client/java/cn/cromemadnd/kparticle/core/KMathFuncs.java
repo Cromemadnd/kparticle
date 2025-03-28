@@ -92,4 +92,22 @@ public class KMathFuncs {
             return args[0] > 0 ? args[1] : args[2];
         }
     };
+    public static final Function sind = new Function("sind", 1) {
+        @Override
+        public double apply(double... args) {
+            return Math.sin(Math.toRadians(args[0]));
+        }
+    };
+    public static final Function cosd = new Function("cosd", 1) {
+        @Override
+        public double apply(double... args) {
+            return Math.cos(Math.toRadians(args[0]));
+        }
+    };
+    public static final Function tand = new Function("tand", 1) {
+        @Override
+        public double apply(double... args) {
+            return Math.tan(Math.toRadians(args[0]));
+        }
+    };
 }

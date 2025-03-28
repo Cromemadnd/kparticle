@@ -10,7 +10,10 @@ public class KExpressionBuilder extends ExpressionBuilder {
             KMathFuncs.min,
             KMathFuncs.clamp,
             KMathFuncs.random,
-            KMathFuncs._if
+            KMathFuncs._if,
+            KMathFuncs.sind,
+            KMathFuncs.cosd,
+            KMathFuncs.tand
         ).variables("t", "p", "c", "n");
     }
 }

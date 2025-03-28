@@ -24,14 +24,14 @@ public class KParticleGroup {
     }
 
     public void merge(NbtCompound params) {
-        for (K_ParticleManager particle : this.particleManagers.keySet()) {
-            particle.merge(K_ParticleManager.toAttributeMap(params));
+        for (K_ParticleManager particleManager : this.particleManagers.keySet()) {
+            particleManager.merge(params);
         }
     }
 
     public void set(NbtCompound params) {
-        for (K_ParticleManager particle : this.particleManagers.keySet()) {
-            particle.set(K_ParticleManager.toAttributeMap(params));
+        for (K_ParticleManager particleManager : this.particleManagers.keySet()) {
+            particleManager.set(params);
         }
     }
 }
