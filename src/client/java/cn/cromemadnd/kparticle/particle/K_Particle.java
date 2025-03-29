@@ -111,7 +111,7 @@ public class K_Particle extends SpriteBillboardParticle {
                 double _z = evaluateWithVariables("z%d".formatted(i), 0.0d, variableSnapshot);
 
                 switch (manager.coords.get(i)) {
-                    case 0: { // 平面直角坐标系（MC，Y为竖轴）
+                    case 0: { // 直角坐标系（MC，Y为竖轴）
                         // x, y, z
                         __x += _x;
                         __y += _y;

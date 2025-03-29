@@ -18,7 +18,8 @@ public class K_ParticleManager {
         "scale", "s",
         "frame", "f",
         "lifetime", "lt",
-        "timescale", "ts"
+        "timescale", "ts",
+        "age", "ag"
     );
     private static final Pattern DYNAMIC_ARGS_PATTERN = Pattern.compile("\\{(\\w+)}");
     public static final WeakHashMap<K_ParticleManager, String> ID_MAP = new WeakHashMap<>();
